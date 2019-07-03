@@ -51,6 +51,16 @@ fn pair<P1, P2, R1, R2>(parser1: P1, parser2: P2)
     }
 }
 
+
+fn map<P, F, A, B>(parser: P, map_fn: F)
+    -> impl Fn(&str) -> Result<(&str, B), &str>
+    where
+        P: Fn(&str) -> Result<(&str, A), &str>,
+        F: Fn(A) -> B,
+{
+    move |input| parser(input).map(|(next, result)| (next, map_fn(result)))
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -98,5 +108,16 @@ mod tests {
         );
         assert_eq!(Err("oops"), tag_opener("oops"));
         assert_eq!(Err("!oops"), tag_opener("<!oops"));
+    }
+
+    #[test]
+    fn map_combinator() {
+        use crate::{identifier, map, match_literal};
+        let to_upper = map(identifier, |s| s.to_uppercase());
+        assert_eq!(
+            Ok((" bob", "ALICE".to_string())),
+            to_upper("alice bob")
+        );
+        assert_eq!(Err("!alice"), to_upper("!alice"));
     }
 }
