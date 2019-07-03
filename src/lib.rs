@@ -144,4 +144,16 @@ mod tests {
         );
         assert_eq!(Err("!alice"), to_upper.parse("!alice"));
     }
+
+    #[test]
+    fn right_combinator() {
+        use crate::{Parser, identifier, match_literal, right};
+        let tag_opener = right(match_literal("<"), identifier);
+        assert_eq!(
+            Ok(("/>", "my-first-element".to_string())),
+            tag_opener.parse("<my-first-element/>")
+        );
+        assert_eq!(Err("oops"), tag_opener.parse("oops"));
+        assert_eq!(Err("!oops"), tag_opener.parse("<!oops"));
+    }
 }
