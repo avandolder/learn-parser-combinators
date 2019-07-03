@@ -1,6 +1,5 @@
 // Following https://bodil.lol/parser-combinators/
-
-use std::collections::HashMap;
+#![type_length_limit = "16777216"]
 
 type ParseResult<'a, Output> = Result<(&'a str, Output), &'a str>;
 
@@ -20,7 +19,7 @@ where
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Element {
     name: String,
-    attr: HashMap<String, String>,
+    attr: Vec<(String, String)>,
     children: Vec<Element>,
 }
 
@@ -171,6 +170,14 @@ fn quoted_string<'a>() -> impl Parser<'a, String> {
     )
 }
 
+fn attr_pair<'a>() -> impl Parser<'a, (String, String)> {
+    pair(identifier, right(match_literal("="), quoted_string()))
+}
+
+fn attr<'a>() -> impl Parser<'a, Vec<(String, String)>> {
+    many(right(space1(), attr_pair()))
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -275,6 +282,17 @@ mod tests {
         assert_eq!(
             Ok(("", "Hello Joe!".to_string())),
             quoted_string().parse("\"Hello Joe!\"")
+        );
+    }
+
+    #[test]
+    fn attr_parser() {
+        use crate::*;
+        assert_eq!(
+            Ok(("",
+                vec![("one".to_string(), "1".to_string()),
+                     ("two".to_string(), "2".to_string())])),
+            attr().parse(" one=\"1\" two=\"2\"")
         );
     }
 }
