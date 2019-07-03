@@ -506,6 +506,6 @@ mod tests {
             <top>
                 <bottom/>
             </middle>"#;
-        assert_eq!(Err("</middle>"), element.parse(doc));
+        assert_eq!(Err("</middle>"), element().parse(doc));
     }
 }
