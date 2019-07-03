@@ -2,6 +2,21 @@
 
 use std::collections::HashMap;
 
+type ParseResult<'a, Output> = Result<(&'a str, Output), &'a str>;
+
+trait Parser<'a, Output> {
+    fn parse(&self, input: &'a str) -> ParseResult<'a, Output>;
+}
+
+impl<'a, F, Output> Parser<'a, Output> for F
+where
+    F: Fn(&'a str) -> ParseResult<Output>,
+{
+    fn parse(&self, input: &'a str) -> ParseResult<'a, Output> {
+        self(input)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Element {
     name: String,
@@ -9,9 +24,7 @@ struct Element {
     children: Vec<Element>,
 }
 
-fn match_literal(expected: &'static str)
-    -> impl Fn(&str) -> Result<(&str, ()), &str>
-{
+fn match_literal<'a>(expected: &'static str) -> impl Fn(&str) -> ParseResult<()> {
     move |input| match input.get(0..expected.len()) {
         Some(next) if next == expected => {
             Ok((&input[expected.len()..], ()))
@@ -20,7 +33,7 @@ fn match_literal(expected: &'static str)
     }
 }
 
-fn identifier(input: &str) -> Result<(&str, String), &str> {
+fn identifier(input: &str) -> ParseResult<String> { 
     let mut matched = String::new();
     let mut chars = input.chars();
 
@@ -36,48 +49,45 @@ fn identifier(input: &str) -> Result<(&str, String), &str> {
     Ok((&input[next_index..], matched))
 }
 
-fn pair<P1, P2, R1, R2>(parser1: P1, parser2: P2)
-    -> impl Fn(&str) -> Result<(&str, (R1, R2)), &str>
+fn pair<'a, P1, P2, R1, R2>(parser1: P1, parser2: P2) -> impl Parser<'a, (R1, R2)>
     where
-        P1: Fn(&str) -> Result<(&str, R1), &str>,
-        P2: Fn(&str) -> Result<(&str, R2), &str>,
+        P1: Parser<'a, R1>,
+        P2: Parser<'a, R2>, 
 {
-    move |input| match parser1(input) {
-        Ok((next_input, result1)) => match parser2(next_input) {
-            Ok((final_input, result2)) => Ok((final_input, (result1, result2))),
-            Err(err) => Err(err),
-        },
-        Err(err) => Err(err),
+    move |input| {
+        parser1.parse(input).and_then(|(next_input, result1)| {
+            parser2.parse(next_input)
+                .map(|(last_input, result2)| (last_input, (result1, result2)))
+        })
     }
 }
 
-
-fn map<P, F, A, B>(parser: P, map_fn: F)
-    -> impl Fn(&str) -> Result<(&str, B), &str>
+fn map<'a, P, F, A, B>(parser: P, map_fn: F) -> impl Parser<'a, B>
     where
-        P: Fn(&str) -> Result<(&str, A), &str>,
+        P: Parser<'a, A>,
         F: Fn(A) -> B,
 {
-    move |input| parser(input).map(|(next, result)| (next, map_fn(result)))
+    move |input| parser.parse(input)
+                       .map(|(next, result)| (next, map_fn(result)))
 }
 
 #[cfg(test)]
 mod tests {
     #[test]
     fn literal_parser() {
-        use crate::match_literal;
+        use crate::{Parser, match_literal};
         let parse_joe = match_literal("Hello Joe!");
         assert_eq!(
             Ok(("", ())),
-            parse_joe("Hello Joe!")
+            parse_joe.parse("Hello Joe!")
         );
         assert_eq!(
             Ok((" Hello Robert!", ())),
-            parse_joe("Hello Joe! Hello Robert!")
+            parse_joe.parse("Hello Joe! Hello Robert!")
         );
         assert_eq!(
             Err("Hello Mike!"),
-            parse_joe("Hello Mike!")
+            parse_joe.parse("Hello Mike!")
         );
     }
 
@@ -100,24 +110,24 @@ mod tests {
 
     #[test]
     fn pair_combinator() {
-        use crate::{identifier, match_literal, pair};
+        use crate::{Parser, identifier, match_literal, pair};
         let tag_opener = pair(match_literal("<"), identifier);
         assert_eq!(
             Ok(("/>", ((), "my-first-element".to_string()))),
-            tag_opener("<my-first-element/>")
+            tag_opener.parse("<my-first-element/>")
         );
-        assert_eq!(Err("oops"), tag_opener("oops"));
-        assert_eq!(Err("!oops"), tag_opener("<!oops"));
+        assert_eq!(Err("oops"), tag_opener.parse("oops"));
+        assert_eq!(Err("!oops"), tag_opener.parse("<!oops"));
     }
 
     #[test]
     fn map_combinator() {
-        use crate::{identifier, map, match_literal};
+        use crate::{Parser, identifier, map};
         let to_upper = map(identifier, |s| s.to_uppercase());
         assert_eq!(
             Ok((" bob", "ALICE".to_string())),
-            to_upper("alice bob")
+            to_upper.parse("alice bob")
         );
-        assert_eq!(Err("!alice"), to_upper("!alice"));
+        assert_eq!(Err("!alice"), to_upper.parse("!alice"));
     }
 }
