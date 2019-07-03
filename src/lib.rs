@@ -26,6 +26,17 @@ trait Parser<'a, Output> {
     {
         BoxedParser::new(pred(self, pred_fn))
     }
+
+    fn and_then<F, NextParser, NewOutput>(self, f: F) -> BoxedParser<'a, NewOutput>
+    where
+        Self: Sized + 'a,
+        Output: 'a,
+        NewOutput: 'a,
+        NextParser: Parser<'a, NewOutput> + 'a,
+        F: Fn(Output) -> NextParser + 'a,
+    {
+        BoxedParser::new(and_then(self, f))
+    }
 }
 
 impl<'a, F, Output> Parser<'a, Output> for F
@@ -292,6 +303,16 @@ fn element<'a>() -> impl Parser<'a, Element> {
 fn close_element<'a>(expected_name: String) -> impl Parser<'a, String> {
     right(match_literal("</"), left(identifier, match_literal(">")))
         .pred(move |name| name == &expected_name)
+}
+
+fn and_then<'a, P, F, A, B, NextP>(parser: P, f: F) -> impl Parser<'a, B>
+where
+    P: Parser<'a, A>,
+    NextP: Parser<'a, B>,
+    F: Fn(A) -> NextP,
+{
+    move |input| parser.parse(input)
+                       .and_then(|(input, result)| f(result).parse(input))
 }
 
 #[cfg(test)]
