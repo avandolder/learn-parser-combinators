@@ -1,5 +1,5 @@
 [package]
-name = "parinator"
+name = "learn-parser-combinators"
 version = "0.1.0"
 authors = ["Adam Vandolder <adam.vandolder@gmail.com>"]
 edition = "2018"
