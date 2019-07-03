@@ -123,7 +123,7 @@ where
     map(pair(parser1, parser2), |(_left, right)| right)
 }
 
-fn multiple<'a, P, A>(parser: P) -> impl Parser<'a, Vec<A>>
+fn one_or_more<'a, P, A>(parser: P) -> impl Parser<'a, Vec<A>>
 where
     P: Parser<'a, A>,
 {
@@ -146,7 +146,7 @@ where
     }
 }
 
-fn many<'a, P, A>(parser: P) -> impl Parser<'a, Vec<A>>
+fn zero_or_more<'a, P, A>(parser: P) -> impl Parser<'a, Vec<A>>
 where
     P: Parser<'a, A>,
 {
@@ -189,18 +189,18 @@ fn whitespace_char<'a>() -> impl Parser<'a, char> {
 }
 
 fn space1<'a>() -> impl Parser<'a, Vec<char>> {
-    multiple(whitespace_char())
+    one_or_more(whitespace_char())
 }
 
 fn space0<'a>() -> impl Parser<'a, Vec<char>> {
-    many(whitespace_char())
+    zero_or_more(whitespace_char())
 }
 
 fn quoted_string<'a>() -> impl Parser<'a, String> {
     right(
         match_literal("\""),
         left(
-            many(any_char.pred(|c| *c != '"')),
+            zero_or_more(any_char.pred(|c| *c != '"')),
             match_literal("\""),
         ),
     )
@@ -212,7 +212,7 @@ fn attribute_pair<'a>() -> impl Parser<'a, (String, String)> {
 }
 
 fn attributes<'a>() -> impl Parser<'a, Vec<(String, String)>> {
-    many(right(space1(), attribute_pair()))
+    zero_or_more(right(space1(), attribute_pair()))
 }
 
 fn element_start<'a>() -> impl Parser<'a, (String, Vec<(String, String)>)> {
@@ -300,18 +300,18 @@ mod tests {
     }
 
     #[test]
-    fn multiple_combinator() {
-        use crate::{Parser, match_literal, multiple};
-        let parser = multiple(match_literal("ha"));
+    fn one_or_more_combinator() {
+        use crate::{Parser, match_literal, one_or_more};
+        let parser = one_or_more(match_literal("ha"));
         assert_eq!(Ok(("", vec![(), (), ()])), parser.parse("hahaha"));
         assert_eq!(Err("ahah"), parser.parse("ahah"));
         assert_eq!(Err(""), parser.parse(""));
     }
 
     #[test]
-    fn many_combinator() {
-        use crate::{Parser, many, match_literal};
-        let parser = many(match_literal("ha"));
+    fn zero_or_more_combinator() {
+        use crate::{Parser, zero_or_more, match_literal};
+        let parser = zero_or_more(match_literal("ha"));
         assert_eq!(Ok(("", vec![(), (), ()])), parser.parse("hahaha"));
         assert_eq!(Ok(("ahah", vec![])), parser.parse("ahah"));
         assert_eq!(Ok(("", vec![])), parser.parse(""));
