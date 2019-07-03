@@ -208,12 +208,24 @@ fn quoted_string<'a>() -> impl Parser<'a, String> {
     .map(|chars| chars.into_iter().collect())
 }
 
-fn attr_pair<'a>() -> impl Parser<'a, (String, String)> {
+fn attribute_pair<'a>() -> impl Parser<'a, (String, String)> {
     pair(identifier, right(match_literal("="), quoted_string()))
 }
 
-fn attr<'a>() -> impl Parser<'a, Vec<(String, String)>> {
-    many(right(space1(), attr_pair()))
+fn attributes<'a>() -> impl Parser<'a, Vec<(String, String)>> {
+    many(right(space1(), attribute_pair()))
+}
+
+fn element_start<'a>() -> impl Parser<'a, (String, Vec<(String, String)>)> {
+    right(match_literal("<"), pair(identifier, attributes()))
+}
+
+fn single_element<'a>() -> impl Parser<'a, Element> {
+    left(element_start(), match_literal("/>")).map(|(name, attr)| Element {
+        name,
+        attr,
+        children: vec![],
+    })
 }
 
 #[cfg(test)]
@@ -324,13 +336,28 @@ mod tests {
     }
 
     #[test]
-    fn attr_parser() {
+    fn attributes_parser() {
         use crate::*;
         assert_eq!(
             Ok(("",
                 vec![("one".to_string(), "1".to_string()),
                      ("two".to_string(), "2".to_string())])),
-            attr().parse(" one=\"1\" two=\"2\"")
+            attributes().parse(" one=\"1\" two=\"2\"")
+        );
+    }
+
+    #[test]
+    fn single_element_parser() {
+        use crate::{Element, Parser, single_element};
+        assert_eq!(
+            Ok(("",
+                Element {
+                    name: "div".to_string(),
+                    attr: vec![("class".to_string(), "float".to_string())],
+                    children: vec![]
+                }
+            )),
+            single_element().parse("<div class=\"float\"/>")
         );
     }
 }
