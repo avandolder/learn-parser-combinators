@@ -269,11 +269,37 @@ fn single_element<'a>() -> impl Parser<'a, Element> {
     })
 }
 
+fn open_element<'a>() -> impl Parser<'a, Element> {
+    left(element_start(), match_literal(">")).map(|(name, attr)| Element {
+        name,
+        attr,
+        children: vec![],
+    })
+}
+
+fn either<'a, P1, P2, A>(parser1: P1, parser2: P2) -> impl Parser<'a, A>
+where
+    P1: Parser<'a, A>,
+    P2: Parser<'a, A>,
+{
+    move |input| parser1.parse(input).or_else(|_| parser2.parse(input))
+}
+
+fn element<'a>() -> impl Parser<'a, Element> {
+    either(single_element(), open_element())
+}
+
+fn close_element<'a>(expected_name: String) -> impl Parser<'a, String> {
+    right(match_literal("</"), left(identifier, match_literal(">")))
+        .pred(move |name| name == &expected_name)
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn literal_parser() {
-        use crate::{Parser, match_literal};
         let parse_joe = match_literal("Hello Joe!");
         assert_eq!(
             Ok(("", ())),
@@ -291,7 +317,6 @@ mod tests {
 
     #[test]
     fn identifer_parser() {
-        use crate::identifier;
         assert_eq!(
             Ok(("", "i-am-an-identifier".to_string())),
             identifier("i-am-an-identifier")
@@ -308,7 +333,6 @@ mod tests {
 
     #[test]
     fn pair_combinator() {
-        use crate::{Parser, identifier, match_literal, pair};
         let tag_opener = pair(match_literal("<"), identifier);
         assert_eq!(
             Ok(("/>", ((), "my-first-element".to_string()))),
@@ -320,7 +344,6 @@ mod tests {
 
     #[test]
     fn map_combinator() {
-        use crate::{Parser, identifier, map};
         let to_upper = map(identifier, |s| s.to_uppercase());
         assert_eq!(
             Ok((" bob", "ALICE".to_string())),
@@ -331,7 +354,6 @@ mod tests {
 
     #[test]
     fn right_combinator() {
-        use crate::{Parser, identifier, match_literal, right};
         let tag_opener = right(match_literal("<"), identifier);
         assert_eq!(
             Ok(("/>", "my-first-element".to_string())),
@@ -343,7 +365,6 @@ mod tests {
 
     #[test]
     fn one_or_more_combinator() {
-        use crate::{Parser, match_literal, one_or_more};
         let parser = one_or_more(match_literal("ha"));
         assert_eq!(Ok(("", vec![(), (), ()])), parser.parse("hahaha"));
         assert_eq!(Err("ahah"), parser.parse("ahah"));
@@ -352,7 +373,6 @@ mod tests {
 
     #[test]
     fn zero_or_more_combinator() {
-        use crate::{Parser, zero_or_more, match_literal};
         let parser = zero_or_more(match_literal("ha"));
         assert_eq!(Ok(("", vec![(), (), ()])), parser.parse("hahaha"));
         assert_eq!(Ok(("ahah", vec![])), parser.parse("ahah"));
@@ -361,7 +381,6 @@ mod tests {
 
     #[test]
     fn match_range_combinator() {
-        use crate::{Parser, match_range, match_literal};
         let parser_incl = match_range(match_literal("ha"), 1..=2);
         assert_eq!(Ok(("", vec![(), (), ()])), parser_incl.parse("hahaha"));
         assert_eq!(Ok(("ah", vec![()])), parser_incl.parse("haah"));
@@ -373,7 +392,6 @@ mod tests {
 
     #[test]
     fn predicate_combinator() {
-        use crate::{Parser, any_char, pred};
         let parser = pred(any_char, |c| *c == 'o');
         assert_eq!(Ok(("mg", 'o')), parser.parse("omg"));
         assert_eq!(Err("lol"), parser.parse("lol"));
@@ -381,7 +399,6 @@ mod tests {
 
     #[test]
     fn quoted_string_parse() {
-        use crate::{Parser, quoted_string};
         assert_eq!(
             Ok(("", "Hello Joe!".to_string())),
             quoted_string().parse("\"Hello Joe!\"")
@@ -390,7 +407,6 @@ mod tests {
 
     #[test]
     fn attributes_parser() {
-        use crate::{Parser, attributes};
         assert_eq!(
             Ok(("",
                 vec![("one".to_string(), "1".to_string()),
@@ -401,7 +417,6 @@ mod tests {
 
     #[test]
     fn single_element_parser() {
-        use crate::{Element, Parser, single_element};
         assert_eq!(
             Ok(("",
                 Element {
