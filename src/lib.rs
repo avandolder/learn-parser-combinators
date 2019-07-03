@@ -1,5 +1,4 @@
 // Following https://bodil.lol/parser-combinators/
-#![type_length_limit = "16777216"]
 
 type ParseResult<'a, Output> = Result<(&'a str, Output), &'a str>;
 
