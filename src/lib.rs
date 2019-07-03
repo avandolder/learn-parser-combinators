@@ -1,5 +1,8 @@
 // Following https://bodil.lol/parser-combinators/
 
+use std::ops::Bound::*;
+use std::ops::RangeBounds;
+
 type ParseResult<'a, Output> = Result<(&'a str, Output), &'a str>;
 
 trait Parser<'a, Output> {
@@ -162,6 +165,45 @@ where
     }
 }
 
+fn match_range<'a, P, A, R>(parser: P, range: R) -> impl Parser<'a, Vec<A>>
+where
+    P: Parser<'a, A>,
+    R: RangeBounds<usize>
+{
+    move |mut input| {
+        let mut result = Vec::new();
+
+        let must_match = match range.start_bound() {
+            Included(bound) => *bound,
+            _ => 0,
+        };
+        for _ in 0..must_match {
+            if let Ok((next_input, item)) = parser.parse(input) {
+                input = next_input;
+                result.push(item);
+            } else {
+                return Err(input);
+            }
+        }
+
+        let max_match = match range.end_bound() {
+            Included(bound) => *bound + 1,
+            Excluded(bound) => *bound,
+            Unbounded => std::usize::MAX,
+        };
+        for _ in must_match..max_match {
+            if let Ok((next_input, item)) = parser.parse(input) {
+                input = next_input;
+                result.push(item);
+            } else {
+                break;
+            }
+        }
+
+        Ok((input, result))
+    }
+}
+
 fn any_char(input: &str) -> ParseResult<char> {
     match input.chars().next() {
         Some(next) => Ok((&input[next.len_utf8()..], next)),
@@ -318,6 +360,18 @@ mod tests {
     }
 
     #[test]
+    fn match_range_combinator() {
+        use crate::{Parser, match_range, match_literal};
+        let parser_incl = match_range(match_literal("ha"), 1..=2);
+        assert_eq!(Ok(("", vec![(), (), ()])), parser_incl.parse("hahaha"));
+        assert_eq!(Ok(("ah", vec![()])), parser_incl.parse("haah"));
+        assert_eq!(Err(""), parser_incl.parse(""));
+        let parser_excl = match_range(match_literal("ha"), 0..2);
+        assert_eq!(Ok(("ha", vec![(), ()])), parser_excl.parse("hahaha"));
+        assert_eq!(Ok(("ahah", vec![])), parser_excl.parse("ahah"));
+    }
+
+    #[test]
     fn predicate_combinator() {
         use crate::{Parser, any_char, pred};
         let parser = pred(any_char, |c| *c == 'o');
@@ -336,7 +390,7 @@ mod tests {
 
     #[test]
     fn attributes_parser() {
-        use crate::*;
+        use crate::{Parser, attributes};
         assert_eq!(
             Ok(("",
                 vec![("one".to_string(), "1".to_string()),
