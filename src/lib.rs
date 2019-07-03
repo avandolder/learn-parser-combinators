@@ -24,11 +24,9 @@ struct Element {
     children: Vec<Element>,
 }
 
-fn match_literal<'a>(expected: &'static str) -> impl Fn(&str) -> ParseResult<()> {
-    move |input| match input.get(0..expected.len()) {
-        Some(next) if next == expected => {
-            Ok((&input[expected.len()..], ()))
-        },
+fn match_literal<'a>(expected: &'static str) -> impl Parser<'a, ()> { 
+    move |input: &'a str| match input.get(0..expected.len()) {
+        Some(next) if next == expected => Ok((&input[expected.len()..], ())),
         _ => Err(input),
     }
 }
@@ -69,6 +67,22 @@ fn map<'a, P, F, A, B>(parser: P, map_fn: F) -> impl Parser<'a, B>
 {
     move |input| parser.parse(input)
                        .map(|(next, result)| (next, map_fn(result)))
+}
+
+fn left<'a, P1, P2, R1, R2>(parser1: P1, parser2: P2) -> impl Parser<'a, R1>
+where
+    P1: Parser<'a, R1>,
+    P2: Parser<'a, R2>,
+{
+    map(pair(parser1, parser2), |(left, _right)| left)
+}
+
+fn right<'a, P1, P2, R1, R2>(parser1: P1, parser2: P2) -> impl Parser<'a, R2>
+where
+    P1: Parser<'a, R1>,
+    P2: Parser<'a, R2>,
+{
+    map(pair(parser1, parser2), |(_left, right)| right)
 }
 
 #[cfg(test)]
