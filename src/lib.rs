@@ -7,7 +7,7 @@ type ParseResult<'a, Output> = Result<(&'a str, Output), &'a str>;
 
 trait Parser<'a, Output> {
     fn parse(&self, input: &'a str) -> ParseResult<'a, Output>;
-    
+
     fn map<F, NewOutput>(self, map_fn: F) -> BoxedParser<'a, NewOutput>
     where
         Self: Sized + 'a,
@@ -76,14 +76,14 @@ struct Element {
     children: Vec<Element>,
 }
 
-fn match_literal<'a>(expected: &'static str) -> impl Parser<'a, ()> { 
+fn match_literal<'a>(expected: &'static str) -> impl Parser<'a, ()> {
     move |input: &'a str| match input.get(0..expected.len()) {
         Some(next) if next == expected => Ok((&input[expected.len()..], ())),
         _ => Err(input),
     }
 }
 
-fn identifier(input: &str) -> ParseResult<String> { 
+fn identifier(input: &str) -> ParseResult<String> {
     let mut matched = String::new();
     let mut chars = input.chars();
 
@@ -92,8 +92,9 @@ fn identifier(input: &str) -> ParseResult<String> {
         _ => return Err(input),
     }
 
-    chars.take_while(|c| c.is_alphanumeric() || *c == '-')
-         .for_each(|c| matched.push(c));
+    chars
+        .take_while(|c| c.is_alphanumeric() || *c == '-')
+        .for_each(|c| matched.push(c));
 
     let next_index = matched.len();
     Ok((&input[next_index..], matched))
@@ -102,11 +103,12 @@ fn identifier(input: &str) -> ParseResult<String> {
 fn pair<'a, P1, P2, R1, R2>(parser1: P1, parser2: P2) -> impl Parser<'a, (R1, R2)>
 where
     P1: Parser<'a, R1>,
-    P2: Parser<'a, R2>, 
+    P2: Parser<'a, R2>,
 {
     move |input| {
         parser1.parse(input).and_then(|(next_input, result1)| {
-            parser2.parse(next_input)
+            parser2
+                .parse(next_input)
                 .map(|(last_input, result2)| (last_input, (result1, result2)))
         })
     }
@@ -117,8 +119,11 @@ where
     P: Parser<'a, A>,
     F: Fn(A) -> B,
 {
-    move |input| parser.parse(input)
-                       .map(|(next, result)| (next, map_fn(result)))
+    move |input| {
+        parser
+            .parse(input)
+            .map(|(next, result)| (next, map_fn(result)))
+    }
 }
 
 fn left<'a, P1, P2, R1, R2>(parser1: P1, parser2: P2) -> impl Parser<'a, R1>
@@ -179,7 +184,7 @@ where
 fn match_range<'a, P, A, R>(parser: P, range: R) -> impl Parser<'a, Vec<A>>
 where
     P: Parser<'a, A>,
-    R: RangeBounds<usize>
+    R: RangeBounds<usize>,
 {
     move |mut input| {
         let mut result = Vec::new();
@@ -307,12 +312,11 @@ fn close_element<'a>(expected_name: String) -> impl Parser<'a, String> {
 
 fn parent_element<'a>() -> impl Parser<'a, Element> {
     open_element().and_then(|el| {
-        left(zero_or_more(element()), close_element(el.name.clone())).map(
-            move |children| {
-                let mut el = el.clone();
-                el.children = children;
-                el
-            })
+        left(zero_or_more(element()), close_element(el.name.clone())).map(move |children| {
+            let mut el = el.clone();
+            el.children = children;
+            el
+        })
     })
 }
 
@@ -322,8 +326,11 @@ where
     NextP: Parser<'a, B>,
     F: Fn(A) -> NextP,
 {
-    move |input| parser.parse(input)
-                       .and_then(|(input, result)| f(result).parse(input))
+    move |input| {
+        parser
+            .parse(input)
+            .and_then(|(input, result)| f(result).parse(input))
+    }
 }
 
 fn whitespace_wrap<'a, P, A>(parser: P) -> impl Parser<'a, A>
@@ -340,18 +347,12 @@ mod tests {
     #[test]
     fn literal_parser() {
         let parse_joe = match_literal("Hello Joe!");
-        assert_eq!(
-            Ok(("", ())),
-            parse_joe.parse("Hello Joe!")
-        );
+        assert_eq!(Ok(("", ())), parse_joe.parse("Hello Joe!"));
         assert_eq!(
             Ok((" Hello Robert!", ())),
             parse_joe.parse("Hello Joe! Hello Robert!")
         );
-        assert_eq!(
-            Err("Hello Mike!"),
-            parse_joe.parse("Hello Mike!")
-        );
+        assert_eq!(Err("Hello Mike!"), parse_joe.parse("Hello Mike!"));
     }
 
     #[test]
@@ -447,9 +448,13 @@ mod tests {
     #[test]
     fn attributes_parser() {
         assert_eq!(
-            Ok(("",
-                vec![("one".to_string(), "1".to_string()),
-                     ("two".to_string(), "2".to_string())])),
+            Ok((
+                "",
+                vec![
+                    ("one".to_string(), "1".to_string()),
+                    ("two".to_string(), "2".to_string())
+                ]
+            )),
             attributes().parse(" one=\"1\" two=\"2\"")
         );
     }
@@ -457,7 +462,8 @@ mod tests {
     #[test]
     fn single_element_parser() {
         assert_eq!(
-            Ok(("",
+            Ok((
+                "",
                 Element {
                     name: "div".to_string(),
                     attr: vec![("class".to_string(), "float".to_string())],
